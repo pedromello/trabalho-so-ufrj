@@ -209,6 +209,56 @@ struct scheduler* create_scheduler() {
     return s;
 }
 
+void getProcessFromQueue (struct scheduler* s, struct queue* q){
+    s->currentProcess = dequeue(q);
+    changeState(s->currentProcess, EM_EXECUCAO);
+    s->timeExecutingProcess = 0;
+}
+
+void getNextProcess(struct scheduler* s){
+    if(!is_empty(s->highPriorityQueue)){
+        puts("Pegando processo da fila de alta prioridade");
+        getProcessFromQueue(s, s->highPriorityQueue);
+    } else if(!is_empty(s->lowPriorityQueue)){
+        puts("Pegando processo da fila de baixa prioridade");
+        getProcessFromQueue(s, s->lowPriorityQueue);
+    }
+}
+
+void sendProcessToQueue(struct queue* q, struct process p, enum status newState){
+    changeState(&p, newState);
+    enqueue(q, p);
+}
+
+void sendCurrentProcessToQueue(struct scheduler* s, struct queue* q, struct process p, enum status newState){
+    sendProcessToQueue(q, p, newState);
+    s->currentProcess = NULL;
+}
+
+void currentProcessDone(struct scheduler* s){
+    changeState(s->currentProcess, FINALIZADO);
+    s->currentProcess = NULL;
+}
+
+void scheaduleOut(struct scheduler* s){
+    if(s->currentProcess->remainingTime == 0){
+        puts("Processo finalizado");
+        currentProcessDone(s);
+    } else if(s->currentProcess->ioDiskTime == s->timeExecutingProcess){
+        puts("Processo em IO no disco");
+        sendCurrentProcessToQueue(s, s->IoDiskQueue, *s->currentProcess, BLOQUEADO);
+    } else if(s->currentProcess->ioTapeTime == s->timeExecutingProcess){
+        puts("Processo em IO na fita");
+        sendCurrentProcessToQueue(s, s->IoTapeQueue, *s->currentProcess, BLOQUEADO);
+    } else if(s->currentProcess->ioPrinterTime == s->timeExecutingProcess){
+        puts("Processo em IO na impressora");
+        sendCurrentProcessToQueue(s, s->IoPrinterQueue, *s->currentProcess, BLOQUEADO);
+    } else if(s->timeExecutingProcess == s->quantum){
+        puts("Quantum finalizado");
+        sendCurrentProcessToQueue(s, s->lowPriorityQueue, *s->currentProcess, PRONTO);
+    }
+}
+
 void clock(struct scheduler* s) {
     s->time++;
 
@@ -216,42 +266,12 @@ void clock(struct scheduler* s) {
         printProcess(*s->currentProcess);
         s->currentProcess->remainingTime--;
         s->timeExecutingProcess++;
-        if(s->currentProcess->remainingTime == 0){
-            puts("Processo finalizado");
-            changeState(s->currentProcess, FINALIZADO);
-            s->currentProcess = NULL;
-        } else if(s->currentProcess->ioDiskTime == s->timeExecutingProcess){
-            puts("Processo em IO no disco");
-            enqueue(s->IoDiskQueue, *s->currentProcess);
-            s->currentProcess = NULL;
-        } else if(s->currentProcess->ioTapeTime == s->timeExecutingProcess){
-            puts("Processo em IO na fita");
-            enqueue(s->IoTapeQueue, *s->currentProcess);
-            s->currentProcess = NULL;
-        } else if(s->currentProcess->ioPrinterTime == s->timeExecutingProcess){
-            puts("Processo em IO na impressora");
-            enqueue(s->IoPrinterQueue, *s->currentProcess);
-            s->currentProcess = NULL;
-        } else if(s->timeExecutingProcess == s->quantum){
-            puts("Quantum finalizado");
-            enqueue(s->lowPriorityQueue, *s->currentProcess);
-            s->currentProcess = NULL;
-        }
+        scheaduleOut(s);
     }
     
     // Pega o processo na fila de prontos (transformar em funcao a parte)
     if(!s->currentProcess){
-        if(!is_empty(s->highPriorityQueue)){
-            puts("Pegando processo da fila de alta prioridade");
-            s->currentProcess = dequeue(s->highPriorityQueue);
-            changeState(s->currentProcess, EM_EXECUCAO);
-            s->timeExecutingProcess = 0;
-        } else if(!is_empty(s->lowPriorityQueue)){
-            puts("Pegando processo da fila de baixa prioridade");
-            s->currentProcess = dequeue(s->lowPriorityQueue);
-            changeState(s->currentProcess, EM_EXECUCAO);
-            s->timeExecutingProcess = 0;
-        }
+        getNextProcess(s);
     }
 
     sleep(1);
