@@ -49,6 +49,7 @@ struct process
     enum status state;
     int burstTime;
     int remainingTime;
+    int timeExecutingProcess;
 
     int ioDiskTime;
     int ioTapeTime;
@@ -65,6 +66,7 @@ struct process* createProcess(int priority, int burstTime, int ioDiskTime, int i
     p->state = PRONTO;
     p->burstTime = burstTime;
     p->remainingTime = burstTime;
+    p->timeExecutingProcess = 0;
     p->ioDiskTime = ioDiskTime;
     p->ioTapeTime = ioTapeTime;
     p->ioPrinterTime = ioPrinterTime;
@@ -81,6 +83,7 @@ struct process* createBasicProcess() {
     p->state = PRONTO;
     p->burstTime = 4;
     p->remainingTime = 4;
+    p->timeExecutingProcess = 0;
     p->ioDiskTime = 2;
     p->ioTapeTime = 0;
     p->ioPrinterTime = 0;
@@ -96,6 +99,7 @@ struct process* createChildProcess(int priority, int parentId, int burstTime, in
     p->state = PRONTO;
     p->burstTime = burstTime;
     p->remainingTime = burstTime;
+    p->timeExecutingProcess = 0;
     p->ioDiskTime = ioDiskTime;
     p->ioTapeTime = ioTapeTime;
     p->ioPrinterTime = ioPrinterTime;
@@ -258,20 +262,28 @@ int areAllQueuesEmpty(struct scheduler* s){
     }
 }
 
+void printProcessInExecution(struct scheduler* s){
+    if(s->currentProcess){
+        printf("[%d]\n", s->currentProcess->pid);
+    } else {
+        printf("[]\n");
+    }
+}
+
 void scheaduleOut(struct scheduler* s){
     if(s->currentProcess->remainingTime == 0){
         //puts("Processo finalizado");
         currentProcessDone(s);
-    } else if(s->currentProcess->ioDiskTime == s->timeExecutingProcess){
+    } else if(s->currentProcess->ioDiskTime == s->currentProcess->timeExecutingProcess){
         //puts("Processo em IO no disco");
         sendCurrentProcessToQueue(s, s->IoDiskQueue, *s->currentProcess, BLOQUEADO);
-    } else if(s->currentProcess->ioTapeTime == s->timeExecutingProcess){
+    } else if(s->currentProcess->ioTapeTime == s->currentProcess->timeExecutingProcess){
         //puts("Processo em IO na fita");
         sendCurrentProcessToQueue(s, s->IoTapeQueue, *s->currentProcess, BLOQUEADO);
-    } else if(s->currentProcess->ioPrinterTime == s->timeExecutingProcess){
+    } else if(s->currentProcess->ioPrinterTime == s->currentProcess->timeExecutingProcess){
         //puts("Processo em IO na impressora");
         sendCurrentProcessToQueue(s, s->IoPrinterQueue, *s->currentProcess, BLOQUEADO);
-    } else if(s->timeExecutingProcess == s->quantum){
+    } else if(s->currentProcess->timeExecutingProcess == s->quantum){
         //puts("Quantum finalizado");
         sendCurrentProcessToQueue(s, s->lowPriorityQueue, *s->currentProcess, PRONTO);
     }
@@ -391,7 +403,7 @@ void clock(struct scheduler* s, struct IoController* controller) {
 
     if(s->currentProcess){
         s->currentProcess->remainingTime--;
-        s->timeExecutingProcess++;
+        s->currentProcess->timeExecutingProcess++;
         scheaduleOut(s);
     }
     
@@ -414,30 +426,32 @@ int main()
     struct process* p1 = createProcess(1,4,2,0,0);
     struct process* p2 = createProcess(1,4,2,0,0);
     struct process* p3 = createProcess(1,4,0,1,0);
-    struct process* p4 = createProcess(1,4,2,0,3);
-    struct process* p5 = createProcess(1,4,0,1,3);
-    struct process* p6 = createProcess(1,4,0,0,1);
-    struct process* p7 = createProcess(1,4,2,0,0);
-    struct process* p8 = createProcess(1,4,2,0,0);
-    struct process* p9 = createProcess(1,4,2,0,0);
-    struct process* p10 = createProcess(1,4,2,0,0);
 
     enqueue(s->highPriorityQueue, *p1);
     enqueue(s->highPriorityQueue, *p2);
     enqueue(s->highPriorityQueue, *p3);
-    enqueue(s->highPriorityQueue, *p4);
-    enqueue(s->highPriorityQueue, *p5);
-    enqueue(s->highPriorityQueue, *p6);
-    enqueue(s->highPriorityQueue, *p7);
-    enqueue(s->highPriorityQueue, *p8);
-    enqueue(s->highPriorityQueue, *p9);
-    enqueue(s->highPriorityQueue, *p10);
 
     puts("---------------- // ----------------");
-    while (!areAllQueuesEmpty(s))
+    puts("Process in execution:");
+    printProcessInExecution(s);
+    puts("High Priority Queue:");
+    print_queue(s->highPriorityQueue);
+    puts("Low Priority Queue:");
+    print_queue(s->lowPriorityQueue);
+    puts("IoDisk Queue:");
+    print_queue(s->IoDiskQueue);
+    puts("IoTape Queue:");
+    print_queue(s->IoTapeQueue);
+    puts("IoPrinter Queue:");
+    print_queue(s->IoPrinterQueue);
+    puts("---------------- // ----------------");
+
+    while (!areAllQueuesEmpty(s) || s->currentProcess)
     {
         clock(s, controller);
         
+        puts("Process in execution:");
+        printProcessInExecution(s);
         puts("High Priority Queue:");
         print_queue(s->highPriorityQueue);
         puts("Low Priority Queue:");
