@@ -1,5 +1,6 @@
-#include<stdio.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <time.h>
+#include <stdlib.h>
 #include <unistd.h> //you need this for linux!
 //#include <dos.h> //you need this for Windows!
 
@@ -10,6 +11,8 @@
 #define IO_DISK_TIME 2
 #define IO_TAPE_TIME 5
 #define IO_PRINTER_TIME 7
+#define RAND_MAX 100
+#define SLEEP_TIME 1500
 
 // ---------------------------- PROCESSO -----------------------------------
 
@@ -106,6 +109,34 @@ struct process* createChildProcess(int priority, int parentId, int burstTime, in
     return p;
 }
 
+struct process* createRandProcess(){
+    struct process* p = (struct process*) malloc(sizeof(struct process));
+    p->pid = PIDs++;
+    p->ppid = 0;
+    p->priority = rand() % 3 + 1;
+    p->state = PRONTO;
+    p->burstTime = rand() % 9 + 2;
+    p->remainingTime = p->burstTime;
+    p->timeExecutingProcess = 0;
+    p->ioDiskTime = rand() % p->burstTime;
+    p->ioTapeTime = rand() % p->burstTime;
+    p->ioPrinterTime = rand() % p->burstTime;
+
+    if(p->ioDiskTime == p->ioTapeTime){
+        p->ioTapeTime = 0;
+    }
+
+    if(p->ioDiskTime == p->ioPrinterTime){
+        p->ioPrinterTime = 0;
+    }
+
+    if(p->ioTapeTime == p->ioPrinterTime){
+        p->ioPrinterTime = 0;
+    }
+
+    return p;
+}
+
 // Muda o status do processo
 void changeState(struct process *p, enum status newState)
 {
@@ -120,7 +151,19 @@ void deleteProcess(struct process p)
 
 // Imprime o processo
 void printProcess(struct process p){
-    printf("Processo \n PID: %d \n PPID: %d \n Prioridade: %d \n Estado: %s \n", p.pid, p.ppid, p.priority, getEnumName(p.state));
+    // Print Process variables in a single print
+    printf("Processo\n");
+    printf(" PID: %d\n", p.pid);
+    printf(" PPID: %d\n", p.ppid);
+    printf(" Priority: %d\n", p.priority);
+    printf(" State: %s\n", getEnumName(p.state));
+    printf(" Burst Time: %d\n", p.burstTime);
+    printf(" Remaining Time: %d\n", p.remainingTime);
+    printf(" Time Executing Process: %d\n", p.timeExecutingProcess);
+    printf(" I/O Disk Time: %d\n", p.ioDiskTime);
+    printf(" I/O Tape Time: %d\n", p.ioTapeTime);
+    printf(" I/O Printer Time: %d\n", p.ioPrinterTime);
+
 }
 
 // ---------------------------- QUEUE STRUCT --------------------------------
@@ -396,7 +439,7 @@ void controllerBehavior(struct scheduler* s, struct IoController* controller){
 }
 
 
-void clock(struct scheduler* s, struct IoController* controller) {
+void clockCpu(struct scheduler* s, struct IoController* controller) {
     s->time++;
 
     controllerBehavior(s, controller);
@@ -412,8 +455,14 @@ void clock(struct scheduler* s, struct IoController* controller) {
         getNextProcess(s);
     }
 
-    sleep(1);
+    usleep(SLEEP_TIME * 1000);
 
+}
+
+void createRandProcessesAndSendToQueue(int n, struct scheduler* s){
+    for(int i = 0; i < n; i++){
+        enqueue(s->highPriorityQueue, *createRandProcess());
+    }
 }
 
 
@@ -423,13 +472,10 @@ int main()
 
     struct IoController* controller = create_IoController(s);
 
-    struct process* p1 = createProcess(1,4,2,0,0);
-    struct process* p2 = createProcess(1,4,2,0,0);
-    struct process* p3 = createProcess(1,4,0,1,0);
+    srand(time(NULL));
+    int randomNumber = rand() % 20 + 1;
 
-    enqueue(s->highPriorityQueue, *p1);
-    enqueue(s->highPriorityQueue, *p2);
-    enqueue(s->highPriorityQueue, *p3);
+    createRandProcessesAndSendToQueue(randomNumber, s);
 
     puts("---------------- // ----------------");
     puts("Process in execution:");
@@ -448,7 +494,7 @@ int main()
 
     while (!areAllQueuesEmpty(s) || s->currentProcess)
     {
-        clock(s, controller);
+        clockCpu(s, controller);
         
         puts("Process in execution:");
         printProcessInExecution(s);
@@ -462,10 +508,16 @@ int main()
         print_queue(s->IoTapeQueue);
         puts("IoPrinter Queue:");
         print_queue(s->IoPrinterQueue);
+        puts("");
+        if(s->currentProcess){
+            puts("Details about Process in execution:");
+            printProcess(*s->currentProcess);
+        }
         puts("---------------- // ----------------");
 
     }
     
+    puts("\nPROCESSOS FINALIZADOS COM SUCESSO!\n");
 
     return 0;
 }
