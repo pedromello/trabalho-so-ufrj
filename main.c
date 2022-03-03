@@ -326,7 +326,7 @@ void scheaduleOut(struct scheduler* s){
     } else if(s->currentProcess->ioPrinterTime == s->currentProcess->timeExecutingProcess){
         //puts("Processo em IO na impressora");
         sendCurrentProcessToQueue(s, s->IoPrinterQueue, *s->currentProcess, BLOQUEADO);
-    } else if(s->currentProcess->timeExecutingProcess == s->quantum){
+    } else if(s->timeExecutingProcess == s->quantum){
         //puts("Quantum finalizado");
         sendCurrentProcessToQueue(s, s->lowPriorityQueue, *s->currentProcess, PRONTO);
     }
@@ -447,6 +447,7 @@ void clockCpu(struct scheduler* s, struct IoController* controller) {
     if(s->currentProcess){
         s->currentProcess->remainingTime--;
         s->currentProcess->timeExecutingProcess++;
+        s->timeExecutingProcess++;
         scheaduleOut(s);
     }
     
